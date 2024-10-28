@@ -1,21 +1,62 @@
 import http from 'http';
-import fs from 'fs';
+import fs from 'fs/promises';
 
-const PORT = 3000;
+const PORT = 3001;
+// const PATH = './data/items.json';
+const PATH = './data/items2.json';
 
 const ROUTS = {
-  getAllItems: '/',
-  getItemById: '/id'
+  main: '/'
 };
-async function getStaticFile(response, path) {
-  fs.readFile(path, { encoding: 'utf8', flag: 'r' }, (error, data) => {
-    if (error) {
-      response.statusCode = 500;
-      response.end();
-    } else {
-      response.end(data);
-    }
-  });
+
+async function getData(response) {
+  try {
+    const result = await fs.readFile(PATH, { encoding: 'utf8', flag: 'r' });
+    response.end(result);
+  } catch (error) {
+    console.log('Error:', error.message);
+    response.statusCode = 500;
+    response.end(`Error: ${error.message}`);
+  }
+}
+
+async function addData(response, item) {
+  try {
+    const oldFileData = await fs.readFile(PATH, {
+      encoding: 'utf8',
+      flag: 'r'
+    });
+    const {
+      uploadFile,
+      description,
+      hashtags,
+      scaleControl,
+      effectLevel,
+      effect
+    } = item;
+    const newFileData = JSON.parse(oldFileData);
+    const newItem = {
+      id: newFileData.data.length + 1,
+      url: uploadFile,
+      scaleControl,
+      effectLevel,
+      effect,
+      hashtags,
+      description,
+      likes: 0,
+      comments: []
+    };
+    newFileData.data.push(newItem);
+    const result = await fs.writeFile(PATH, JSON.stringify(newFileData), {
+      encoding: 'utf8',
+      flag: 'w'
+    });
+    response.end(JSON.stringify(newItem));
+  } catch (error) {
+    console.log('Error:', error.message);
+    response.statusCode = 500;
+    response.end(`Error: ${error.message}`);
+  }
 }
 
 const server = http.createServer((request, response) => {
@@ -23,17 +64,27 @@ const server = http.createServer((request, response) => {
   const { pathname } = url;
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   switch (true) {
-    case ROUTS.getAllItems === pathname && request.method === 'GET':
-      getStaticFile(response, './data/items.json');
+    case request.method === 'OPTIONS':
+      response.end();
       break;
 
-    case ROUTS.getAllItems === pathname && request.method === 'POST':
-      // to do
-      getStaticFile(response, './data/items.json');
+    case ROUTS.main === pathname && request.method === 'GET':
+      getData(response);
+      break;
+
+    case ROUTS.main === pathname && request.method === 'POST':
+      let item = '';
+      request.on('data', (chunk) => {
+        item += chunk.toString();
+      });
+      request.on('end', () => {
+        const newItem = JSON.parse(item);
+        addData(response, newItem);
+      });
       break;
 
     default:
